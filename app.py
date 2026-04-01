@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session
 from flask_cors import CORS
 import anthropic
 import requests
@@ -9,17 +9,42 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# 環境変数からAPIキーを取得（Renderの環境変数に設定する）
+# 環境変数から取得（Renderの環境変数に設定する）
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+APP_PASSWORD       = os.environ.get("APP_PASSWORD", "password123")  # ← デフォルトは変更してください
+app.secret_key     = os.environ.get("SECRET_KEY", "change-this-secret-key")
+
+
+def check_auth():
+    """セッションで認証済みか確認"""
+    return session.get("authenticated") is True
+
 
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
 
 
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.json
+    if data.get("password") == APP_PASSWORD:
+        session["authenticated"] = True
+        return jsonify({"success": True})
+    return jsonify({"error": "パスワードが違います"}), 401
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"success": True})
+
+
 @app.route("/extract_batch", methods=["POST"])
 def extract_batch():
-    """複数の名刺画像を1回のAPI呼び出しでまとめて処理する"""
+    if not check_auth():
+        return jsonify({"error": "認証が必要です"}), 401
+
     data = request.json
     images = data.get("images", [])
 
@@ -88,7 +113,9 @@ resultsの配列は名刺の枚数分（{len(images)}件）入れてください
 
 @app.route("/write_sheet_batch", methods=["POST"])
 def write_sheet_batch():
-    """複数行をまとめてスプレッドシートに書き込む"""
+    if not check_auth():
+        return jsonify({"error": "認証が必要です"}), 401
+
     data = request.json
     token    = data.get("token")
     sheet_id = data.get("sheet_id")
