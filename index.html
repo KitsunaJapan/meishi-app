@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>名刺リーダー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 700px; margin: 0 auto; }
+  .header { margin-bottom: 2rem; }
+  .header h1 { font-size: 22px; font-weight: 500; }
+  .header p { font-size: 13px; color: #666; margin-top: 4px; }
+  .tab-row { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 1.5rem; }
+  .tab { padding: 8px 18px; font-size: 13px; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; color: #888; margin-bottom: -1px; font-family: inherit; }
+  .tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; font-weight: 500; }
+  .section { margin-bottom: 1.5rem; }
+  .section-label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  input[type="text"], input[type="password"] { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #1a1a1a; font-size: 13px; font-family: inherit; margin-bottom: 8px; }
+  input:focus { outline: none; border-color: #aaa; }
+  input::placeholder { color: #bbb; }
+
+  /* アップロードゾーン */
+  .upload-zone { border: 1.5px dashed #ccc; border-radius: 12px; padding: 2rem 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: #fff; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: #888; background: #fafafa; }
+  .upload-icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-text { font-size: 14px; color: #555; }
+  .upload-sub { font-size: 12px; color: #aaa; margin-top: 4px; }
+
+  /* プレビューグリッド */
+  .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
+  .preview-item { position: relative; background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; }
+  .preview-item img { width: 100%; height: 100px; object-fit: cover; display: block; }
+  .preview-item .remove-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; border: none; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; line-height: 1; }
+  .preview-item .img-label { font-size: 11px; color: #888; padding: 4px 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .preview-item .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; background: #ccc; }
+  .preview-item.done .status-dot { background: #2e7d32; }
+  .preview-item.error .status-dot { background: #c62828; }
+  .preview-item.processing .status-dot { background: #1a56db; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  /* ボタン */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 18px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #1a1a1a; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .btn:hover { background: #f5f4f0; }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .btn.primary:hover { background: #333; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn.small { padding: 6px 14px; width: auto; font-size: 13px; }
+  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1.5rem; }
+
+  /* 結果テーブル */
+  .result-table-wrap { overflow-x: auto; }
+  table.result-table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid #e8e8e8; }
+  table.result-table th { background: #f5f4f0; padding: 8px 10px; text-align: left; font-weight: 500; color: #555; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+  table.result-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  table.result-table tr:last-child td { border-bottom: none; }
+  table.result-table input { width: 100%; min-width: 80px; border: none; background: transparent; font-size: 12px; font-family: inherit; color: #1a1a1a; padding: 2px 4px; border-radius: 4px; }
+  table.result-table input:focus { outline: none; background: #f5f4f0; }
+  table.result-table .row-num { color: #aaa; text-align: center; width: 28px; font-size: 11px; }
+
+  /* ステータス */
+  .status-bar { font-size: 13px; padding: 10px 14px; border-radius: 8px; margin-bottom: 1rem; }
+  .status-bar.loading { background: #e8f0fe; color: #1a56db; }
+  .status-bar.success { background: #e8f5e9; color: #2e7d32; }
+  .status-bar.error { background: #fdecea; color: #c62828; }
+  .hidden { display: none !important; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 履歴 */
+  .history-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  .history-item:last-child { border-bottom: none; }
+  .history-name { font-weight: 500; }
+  .history-company { color: #888; font-size: 12px; }
+  .badge { font-size: 11px; padding: 2px 9px; border-radius: 999px; background: #e8f5e9; color: #2e7d32; }
+  .note { font-size: 12px; color: #888; line-height: 1.6; padding: 10px 12px; background: #fff; border-radius: 8px; border: 1px solid #e8e8e8; }
+  .note a { color: #1a56db; }
+  .count-badge { font-size: 12px; background: #1a1a1a; color: #fff; border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
+
+  #file-input { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>名刺リーダー</h1>
+    <p>複数の名刺をまとめて読み取り、スプレッドシートに一括転記します</p>
+  </div>
+
+  <div class="tab-row">
+    <button class="tab active" onclick="switchTab('main')">名刺読み取り</button>
+    <button class="tab" onclick="switchTab('settings')">設定</button>
+    <button class="tab" onclick="switchTab('history')">履歴</button>
+  </div>
+
+  <!-- メインタブ -->
+  <div id="tab-main">
+    <div id="status-bar" class="status-bar hidden"></div>
+
+    <div class="section">
+      <div class="section-label">名刺画像（複数選択可）</div>
+      <div class="upload-zone" id="upload-zone"
+        onclick="document.getElementById('file-input').click()"
+        ondragover="handleDrag(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div class="upload-icon">📷</div>
+        <div class="upload-text">クリックまたはドラッグ&ドロップ</div>
+        <div class="upload-sub">JPG / PNG / WEBP 対応 ・ 最大20枚</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" multiple onchange="handleFiles(event)" />
+      <div class="preview-grid" id="preview-grid"></div>
+    </div>
+
+    <div class="btn-grid">
+      <button class="btn" onclick="resetAll()">リセット</button>
+      <button class="btn primary" id="extract-btn" onclick="extractBatch()" disabled>
+        <span id="extract-label">✦ まとめて読み取り</span>
+      </button>
+    </div>
+
+    <div id="result-section" class="hidden">
+      <div class="section">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div class="section-label">
+            抽出データ（編集可能）
+            <span class="count-badge" id="result-count">0</span>
+          </div>
+          <button class="btn small" onclick="document.getElementById('result-section').classList.add('hidden')">クリア</button>
+        </div>
+        <div class="result-table-wrap">
+          <table class="result-table" id="result-table">
+            <thead>
+              <tr>
+                <th class="row-num">#</th>
+                <th>会社名</th><th>部署</th><th>役職</th><th>氏名</th>
+                <th>電話</th><th>携帯</th><th>FAX</th><th>メール</th><th>住所</th><th>URL</th>
+              </tr>
+            </thead>
+            <tbody id="result-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <button class="btn primary" id="sheet-btn" onclick="writeBatchToSheet()" style="margin-top:8px;">
+        <span id="sheet-label">📊 スプレッドシートに一括転記</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 設定タブ -->
+  <div id="tab-settings" class="hidden">
+    <div class="section">
+      <div class="section-label">Google Sheets 設定</div>
+      <input type="text" id="sheet-id" placeholder="スプレッドシートID" value="1ugN2SlnT-6PWjZLhF-E4NOu34ifXKVj7NvY8gdizqMM" />
+      <input type="text" id="sheet-range" placeholder="範囲 例: Sheet1!A:K" value="Sheet1!A:K" />
+      <input type="password" id="google-token" placeholder="Google OAuth アクセストークン" />
+      <div class="note">
+        トークン取得：<a href="https://developers.google.com/oauthplayground/" target="_blank">OAuth Playground</a> を開き、
+        「Google Sheets API v4」→「.../auth/spreadsheets」を選択して認証し、
+        取得した <code>access_token</code> を貼り付けてください。
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-label">転記列の順番</div>
+      <div class="note">A: 日付 / B: 会社名 / C: 部署 / D: 役職 / E: 氏名 / F: 電話 / G: 携帯 / H: FAX / I: メール / J: 住所 / K: URL</div>
+    </div>
+    <button class="btn primary" onclick="saveSettings()">設定を保存</button>
+  </div>
+
+  <!-- 履歴タブ -->
+  <div id="tab-history" class="hidden">
+    <div class="section">
+      <div class="section-label">転記済み名刺</div>
+      <div id="history-list">
+        <div style="font-size:13px; color:#aaa; padding:1rem 0;">まだ転記した名刺がありません</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = "http://localhost:5000";
+  const FIELDS = ["company","department","title","name","phone","mobile","fax","email","address","url"];
+  let imageList = []; // [{file, b64, mediaType}]
+  let historyLog = [];
+
+  window.onload = () => {
+    const saved = JSON.parse(localStorage.getItem('meishi_settings') || '{}');
+    if (saved.sheetId)     document.getElementById('sheet-id').value = saved.sheetId;
+    if (saved.sheetRange)  document.getElementById('sheet-range').value = saved.sheetRange;
+    if (saved.googleToken) document.getElementById('google-token').value = saved.googleToken;
+    historyLog = JSON.parse(localStorage.getItem('meishi_history') || '[]');
+    renderHistory();
+  };
+
+  function switchTab(name) {
+    ['main','settings','history'].forEach((t, i) => {
+      document.getElementById('tab-'+t).classList.add('hidden');
+      document.querySelectorAll('.tab')[i].classList.remove('active');
+    });
+    document.getElementById('tab-'+name).classList.remove('hidden');
+    document.querySelectorAll('.tab')[['main','settings','history'].indexOf(name)].classList.add('active');
+  }
+
+  function handleDrag(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('dragover'); }
+  function handleDragLeave() { document.getElementById('upload-zone').classList.remove('dragover'); }
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('upload-zone').classList.remove('dragover');
+    addFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')));
+  }
+  function handleFiles(e) { addFiles(Array.from(e.target.files)); }
+
+  function addFiles(files) {
+    files.slice(0, 20 - imageList.length).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const b64 = e.target.result.split(',')[1];
+        imageList.push({ file, b64, mediaType: file.type || 'image/jpeg' });
+        renderPreviews();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderPreviews() {
+    const grid = document.getElementById('preview-grid');
+    grid.innerHTML = imageList.map((img, i) => `
+      <div class="preview-item" id="preview-${i}">
+        <button class="remove-btn" onclick="removeImage(${i})">×</button>
+        <img src="data:${img.mediaType};base64,${img.b64}" />
+        <div class="img-label">
+          <span class="status-dot"></span>${img.file.name}
+        </div>
+      </div>
+    `).join('');
+    document.getElementById('extract-btn').disabled = imageList.length === 0;
+    document.getElementById('extract-label').textContent = imageList.length > 0
+      ? `✦ ${imageList.length}枚をまとめて読み取り`
+      : '✦ まとめて読み取り';
+  }
+
+  function removeImage(i) {
+    imageList.splice(i, 1);
+    renderPreviews();
+  }
+
+  function resetAll() {
+    imageList = [];
+    renderPreviews();
+    document.getElementById('result-section').classList.add('hidden');
+    document.getElementById('file-input').value = '';
+    setStatus('', '');
+  }
+
+  function setStatus(msg, type) {
+    const bar = document.getElementById('status-bar');
+    if (!msg) { bar.classList.add('hidden'); return; }
+    bar.textContent = msg;
+    bar.className = 'status-bar ' + type;
+    bar.classList.remove('hidden');
+  }
+
+  async function extractBatch() {
+    if (imageList.length === 0) return;
+    const btn = document.getElementById('extract-btn');
+    btn.disabled = true;
+    document.getElementById('extract-label').innerHTML = `<span class="spinner"></span> ${imageList.length}枚を処理中...`;
+    setStatus(`AIが${imageList.length}枚の名刺を一括解析しています（1回のAPI呼び出し）...`, 'loading');
+
+    // プレビューをprocessingに
+    imageList.forEach((_, i) => document.getElementById('preview-'+i)?.classList.add('processing'));
+
+    try {
+      const res = await fetch(`${API_BASE}/extract_batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          images: imageList.map(img => ({ image_b64: img.b64, media_type: img.mediaType }))
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'APIエラー');
+
+      imageList.forEach((_, i) => {
+        const el = document.getElementById('preview-'+i);
+        if (el) { el.classList.remove('processing'); el.classList.add('done'); }
+      });
+
+      renderResultTable(data.results);
+      setStatus(`✓ ${data.results.length}枚の名刺を読み取りました！内容を確認・編集してから転記してください。`, 'success');
+
+    } catch (err) {
+      imageList.forEach((_, i) => {
+        const el = document.getElementById('preview-'+i);
+        if (el) { el.classList.remove('processing'); el.classList.add('error'); }
+      });
+      setStatus('エラー: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('extract-label').textContent = `✦ ${imageList.length}枚をまとめて読み取り`;
+    }
+  }
+
+  function renderResultTable(results) {
+    const tbody = document.getElementById('result-tbody');
+    const fieldLabels = ['会社名','部署','役職','氏名','電話','携帯','FAX','メール','住所','URL'];
+    tbody.innerHTML = results.map((r, i) => `
+      <tr>
+        <td class="row-num">${i+1}</td>
+        ${FIELDS.map(f => `<td><input type="text" id="r${i}_${f}" value="${(r[f]||'').replace(/"/g,'&quot;')}" placeholder="-" /></td>`).join('')}
+      </tr>
+    `).join('');
+    document.getElementById('result-count').textContent = results.length;
+    document.getElementById('result-section').classList.remove('hidden');
+  }
+
+  async function writeBatchToSheet() {
+    const token   = document.getElementById('google-token').value.trim();
+    const sheetId = document.getElementById('sheet-id').value.trim();
+    const range   = document.getElementById('sheet-range').value.trim();
+    if (!token)   { setStatus('GoogleのアクセストークンをSettingsに入力してください', 'error'); return; }
+    if (!sheetId) { setStatus('スプレッドシートIDを設定してください', 'error'); return; }
+
+    const tbody = document.getElementById('result-tbody');
+    const rowCount = tbody.querySelectorAll('tr').length;
+    if (rowCount === 0) return;
+
+    const btn = document.getElementById('sheet-btn');
+    btn.disabled = true;
+    document.getElementById('sheet-label').innerHTML = '<span class="spinner"></span> 一括転記中...';
+    setStatus('スプレッドシートに書き込んでいます...', 'loading');
+
+    const today = new Date().toLocaleDateString('ja-JP');
+    const rows = Array.from({length: rowCount}, (_, i) => {
+      const vals = FIELDS.reduce((acc, f) => { acc[f] = document.getElementById(`r${i}_${f}`)?.value || ''; return acc; }, {});
+      return [today, vals.company, vals.department, vals.title, vals.name, vals.phone, vals.mobile, vals.fax, vals.email, vals.address, vals.url];
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/write_sheet_batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, sheet_id: sheetId, range, rows })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '書き込みエラー');
+
+      // 履歴に追加
+      rows.forEach(r => historyLog.unshift({ name: r[4], company: r[1], date: today }));
+      localStorage.setItem('meishi_history', JSON.stringify(historyLog.slice(0, 100)));
+      renderHistory();
+
+      setStatus(`✓ ${data.written}件をスプレッドシートに転記しました`, 'success');
+      document.getElementById('sheet-label').textContent = `✓ ${data.written}件 転記完了`;
+      setTimeout(() => { document.getElementById('sheet-label').textContent = '📊 スプレッドシートに一括転記'; }, 3000);
+
+    } catch (err) {
+      setStatus('転記エラー: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('history-list');
+    if (!historyLog.length) {
+      list.innerHTML = '<div style="font-size:13px; color:#aaa; padding:1rem 0;">まだ転記した名刺がありません</div>';
+      return;
+    }
+    list.innerHTML = historyLog.slice(0, 30).map(h => `
+      <div class="history-item">
+        <div>
+          <div class="history-name">${h.name || '（名前なし）'}</div>
+          <div class="history-company">${h.company || ''} · ${h.date}</div>
+        </div>
+        <span class="badge">転記済み</span>
+      </div>
+    `).join('');
+  }
+
+  function saveSettings() {
+    localStorage.setItem('meishi_settings', JSON.stringify({
+      sheetId: document.getElementById('sheet-id').value,
+      sheetRange: document.getElementById('sheet-range').value,
+      googleToken: document.getElementById('google-token').value,
+    }));
+    setStatus('設定を保存しました', 'success');
+    setTimeout(() => setStatus('', ''), 2000);
+    switchTab('main');
+  }
+</script>
+</body>
+</html>
