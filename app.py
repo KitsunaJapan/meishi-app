@@ -90,11 +90,25 @@ def extract_batch():
 resultsの配列は名刺の枚数分（{len(images)}件）入れてください。値がない場合は空文字にしてください。"""
     })
 
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=300 * len(images),
-        messages=[{"role": "user", "content": content}]
-    )
+    try:
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500 * len(images),
+            messages=[{"role": "user", "content": content}]
+        )
+    except anthropic.AuthenticationError:
+        return jsonify({"error": "APIキーが無効です。RenderのANTHROPIC_API_KEYを確認してください。"}), 502
+    except anthropic.PermissionDeniedError:
+        return jsonify({"error": "このAPIキーでは利用できません。Anthropicコンソールの設定を確認してください。"}), 502
+    except anthropic.BadRequestError as e:
+        # 残高不足もここに来る
+        if "credit balance" in str(e):
+            return jsonify({"error": "Anthropic APIの残高が不足しています。コンソールでチャージしてください。"}), 502
+        return jsonify({"error": "読み取れない画像が含まれています。別の画像でお試しください。"}), 400
+    except anthropic.RateLimitError:
+        return jsonify({"error": "APIの利用が集中しています。少し待ってから再度お試しください。"}), 429
+    except anthropic.APIError as e:
+        return jsonify({"error": f"AIの処理でエラーが発生しました: {type(e).__name__}"}), 502
 
     text = message.content[0].text.strip()
     match = re.search(r'\{[\s\S]*\}', text)

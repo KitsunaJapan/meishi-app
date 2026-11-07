@@ -265,16 +265,36 @@
   }
   function handleFiles(e) { addFiles(Array.from(e.target.files)); }
 
-  function addFiles(files) {
-    files.slice(0, 20 - imageList.length).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const b64 = e.target.result.split(',')[1];
-        imageList.push({ file, b64, mediaType: file.type || 'image/jpeg' });
-        renderPreviews();
+  // 画像を長辺1600pxに縮小し、JPEGに統一する（形式不一致・サイズ超過による読み取りエラーを防ぐ）
+  function toJpegB64(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
       };
-      reader.readAsDataURL(file);
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('読み込めない画像: ' + file.name)); };
+      img.src = url;
     });
+  }
+
+  async function addFiles(files) {
+    const list = files.filter(f => f.type.startsWith('image/')).slice(0, 20 - imageList.length);
+    for (const file of list) {
+      try {
+        imageList.push({ file, b64: await toJpegB64(file), mediaType: 'image/jpeg' });
+      } catch (e) {
+        setStatus(e.message, 'error');
+      }
+    }
+    renderPreviews();
   }
 
   function renderPreviews() {
